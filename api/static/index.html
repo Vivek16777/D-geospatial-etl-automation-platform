@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Geospatial Roads Map</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body { margin: 0; }
+    #map { height: 100vh; width: 100vw; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map').setView([30.2672, -97.7431], 13);
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    const geoserverWms = L.tileLayer.wms('http://localhost:8080/geoserver/fme_lab/wms', {
+      layers: 'fme_lab:roads',
+      format: 'image/png',
+      transparent: true
+    });
+
+    const baseMaps = {
+      "OpenStreetMap": osm
+    };
+
+    const overlayMaps = {
+      "GeoServer WMS Roads": geoserverWms
+    };
+
+    const layerControl = L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+    fetch('/roads')
+      .then(response => response.json())
+      .then(data => {
+        const fastApiLayer = L.geoJSON(data, {
+          style: { weight: 5 },
+          onEachFeature: function (feature, layer) {
+            layer.bindPopup(`
+              <b>FastAPI Road</b><br>
+              Name: ${feature.properties.road_name || 'Unnamed road'}<br>
+              ID: ${feature.properties.road_id}<br>
+              Type: ${feature.properties.road_type}<br>
+              Source: ${feature.properties.source_file || 'Unknown'}
+            `);
+          }
+        }).addTo(map);
+
+        layerControl.addOverlay(fastApiLayer, "FastAPI GeoJSON Roads");
+        map.fitBounds(fastApiLayer.getBounds());
+      });
+
+    fetch('http://localhost:8080/geoserver/fme_lab/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=fme_lab:roads&outputFormat=application/json')
+      .then(response => response.json())
+      .then(data => {
+        const geoserverWfsLayer = L.geoJSON(data, {
+          style: { weight: 2 },
+          onEachFeature: function (feature, layer) {
+            layer.bindPopup(`
+             <b>GeoServer WFS Road</b><br>
+              Name: ${feature.properties.road_name || 'Unnamed road'}<br>
+              ID: ${feature.properties.road_id}<br>
+              Type: ${feature.properties.road_type}<br>
+              Source: ${feature.properties.source_file || 'Unknown'}
+           `);
+          }
+        });
+
+        layerControl.addOverlay(geoserverWfsLayer, "GeoServer WFS Roads");
+      });
+  </script>
+</body>
+</html>
